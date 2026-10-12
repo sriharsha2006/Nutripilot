@@ -1,0 +1,107 @@
+\documentclass[10pt,twocolumn]{article}
+\usepackage[letterpaper,margin=0.72in,columnsep=0.25in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{newtxtext,newtxmath}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{abstract}
+\usepackage{titlesec}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+\renewcommand{\abstractname}{Abstract}
+\titleformat{\section}{\normalfont\bfseries\small}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalfont\itshape\small}{\thesubsection}{0.5em}{}
+\title{NutriPilot: A Constraint-Aware Personal Nutrition and Meal-Planning Web Application}
+\author{Pavan Aditya\\G Sri Harsha\\M Pallavi\\\small Department of Computer Science and Engineering, Amrita Vishwa Vidyapeetham\\\small M Pallavi: Junior Grade}
+\date{}
+
+\begin{document}
+\twocolumn[\maketitle
+\begin{onecolabstract}
+Personal nutrition applications can combine dietary targets, meal selection, pantry inventory, and behavior tracking, yet many prototype systems describe these functions without clearly separating algorithmic estimates from validated outcomes. This paper presents NutriPilot, a web-based capstone prototype for profile-based meal planning and nutrition tracking. The application provides onboarding, energy and macronutrient target calculation, a weekly recipe plan, allergy and dietary filtering, meal substitution and locking, pantry-aware grocery generation, daily tracking, progress views, and PDF reports. Its target calculator implements the Mifflin--St Jeor equation with activity multipliers, a configurable weight-change energy adjustment, a calorie floor for weight-loss plans, and fixed default macronutrient energy ratios. Meal selection operates on a small curated recipe catalog and uses deterministic day/slot selection; a separate recommendation scorer combines nutrition fit, dietary preferences, goal alignment, budget, preparation time, interaction history, and pantry matches. The current implementation uses process-local in-memory mock stores and simulated progress data. Accordingly, this work documents a functional software prototype and its design, not a clinical intervention or an empirically validated recommender. We describe the architecture, algorithms, implemented capabilities, and limitations, and outline a reproducible evaluation plan for future work.
+\end{onecolabstract}
+\vspace{0.7em}]
+
+\noindent\textbf{Keywords---} personalized nutrition, meal planning, dietary constraints, pantry management, web application, recommender systems
+
+\section{Introduction}
+Nutrition planning involves coordinating energy goals, food preferences, allergies, available ingredients, and daily routines. A digital tool can reduce the organizational burden by connecting a personal profile to meal suggestions, a shopping list, and progress tracking. However, personalization claims should be interpreted in light of the underlying data and algorithms: a rule-based prototype using a short recipe catalog is not equivalent to a clinically validated or data-trained system.
+
+NutriPilot was developed as a Foundations of AI capstone project. It is a responsive web application that integrates profile setup, estimated nutrition targets, weekly meal planning, recipe management, pantry and grocery features, logging, analytics, and report generation. This paper makes three contributions: (1) it documents an integrated, modular implementation spanning these user workflows; (2) it explains the nutrition calculation, hard-constraint filtering, plan construction, and recommendation scoring implemented in the source; and (3) it identifies the boundaries of the evidence and a path to meaningful evaluation.
+
+The remainder of the paper is organized as follows. Section II reviews relevant computational approaches. Section III describes the system and algorithms. Section IV summarizes implementation and functional coverage. Section V discusses limitations and evaluation requirements, and Section VI concludes.
+
+\section{Background and Related Work}
+Personalized food recommendation commonly combines explicit preferences, nutritional attributes, and contextual information. Constraint-based recommenders are useful where some requirements are non-negotiable, such as excluding a declared allergen, while softer preferences can rank the remaining options. Recipe and meal-planning research also highlights that nutritional adequacy alone does not capture practicality: cost, cooking time, ingredient availability, and user acceptance affect whether a suggested plan is usable.
+
+NutriPilot adopts this hybrid pattern in a deliberately small prototype. Allergy, disliked-ingredient, and selected diet checks act as filters; a weighted heuristic ranks candidates for recommendations. Its recipe set and nutrition values are curated application data rather than a comprehensive food-composition database. The system therefore illustrates integration of methods rather than establishing superiority over published recommender systems.
+
+\section{System Design and Methods}
+\subsection{Architecture}
+NutriPilot is implemented with Next.js App Router, React, and TypeScript. UI pages call typed client API functions; server route handlers delegate operations to domain modules under \texttt{src/lib/mock}. The modules separate authentication, profile and nutrition calculations, recipes and plans, pantry and grocery operations, tracking, reports, and interaction history. Reusable interface components support meal cards, recipe cooking mode, and report previews. Recharts is used for progress visualizations, and a small PDF writer constructs downloadable report documents.
+
+The persistence layer is intentionally a mock: users, profiles, plans, pantry items, logs, and reports are held in process memory. Values reset when the server process restarts. Authentication uses signed HS256 JWTs in HTTP-only cookies, with scrypt password hashing and a per-email attempt counter in the mock service. A development fallback signing secret exists and must be replaced by a strong configured secret before deployment.
+
+\subsection{Nutrition Target Estimation}
+For age $a$ in years, mass $w$ in kilograms, height $h$ in centimeters, and a sex-specific offset $s$, basal metabolic rate is estimated as
+\begin{equation}
+ BMR = 10w + 6.25h - 5a + s,
+\end{equation}
+where the implementation uses $s=5$ for male, $s=-161$ for female, and $s=-78$ otherwise. Total daily energy expenditure is $TDEE=\operatorname{round}(BMR\times A)$, where activity factor $A$ is selected from five categories (1.20--1.90); an unknown category falls back to 1.375.
+
+For a loss or gain goal, the estimated daily adjustment is $D=\operatorname{round}(p\times7700/7)$ kcal/day, where $p$ is target pace in kg/week (default 0.5). The target is $TDEE-D$ for loss, bounded below by 1200 kcal/day; $TDEE+D$ for gain; and $TDEE$ for maintenance. Default macronutrient energy shares are 50\% carbohydrate, 25\% protein, and 25\% fat, converted to grams using 4, 4, and 9 kcal/g, respectively. The profile supports user-defined macro targets. These formulas are estimates and the implementation does not include age- or condition-specific clinical review.
+
+\subsection{Constraint Filtering and Meal Plans}
+Recipes carry per-serving energy, macronutrients, ingredients, allergens, and dietary tags. Candidate filtering rejects recipes whose allergen text matches a declared allergy, whose ingredients match a disliked ingredient, or whose tags and attributes fail selected hard diet checks (vegan, vegetarian, gluten-free, dairy-free, halal, kosher, or a carbohydrate threshold for keto). These are string- and tag-based rules; they depend on catalog completeness and labeling accuracy.
+
+Weekly plans contain four slots per day (breakfast, lunch, dinner, snack) over seven named days. A small fixed catalog is divided into slot-specific pools; recipes are selected by day-index modulo pool length, with a fallback to the allowed catalog. Thus, current plan generation is deterministic rather than an optimization solver or generative AI model. Regeneration can retain locked meals. Meal refresh, swapping, serving changes, and eaten state are exposed through application interactions. Daily totals are calculated by multiplying recipe per-serving values by servings and summing across slots.
+
+\subsection{Recommendation Heuristic and Grocery Compilation}
+The recommendation scorer computes normalized components for meal-slot calorie fit, diet-tag overlap, goal alignment, a preference-derived cuisine proxy, budget fit, preparation-time fit, recent interaction history, and pantry overlap. The weighted sum uses coefficients 0.30, 0.20, 0.15, 0.10, 0.10, 0.05, 0.10, and 0.08, respectively, and is capped at 1.00. Since the weights sum to 1.08 before capping and the cuisine component duplicates the preference component, the output should be interpreted as a heuristic score, not a calibrated probability. Interactions are held in memory; positive eaten/favorite events and negative swap/dislike/refresh events adjust a bounded per-recipe preference score.
+
+Grocery-list generation aggregates ingredient quantities from all meals and servings in the active plan. For each ingredient it finds the first pantry item with a substring name match, subtracts up to the required quantity, and marks fully covered items checked. Cost is a rough estimate based on the number of unchecked unique ingredients, not market prices or quantities. Pantry subtraction is used for list generation; it does not represent verified physical inventory consumption.
+
+\section{Implementation and Functional Coverage}
+The repository traceability matrix reports implementation of 22 functional requirements across authentication, onboarding, target calculation, planning, meal actions, recommendations, pantry and grocery management, tracking, progress, custom recipes, cooking mode, reports, email, and settings. The implementation includes REST-style route handlers and client-facing pages for these features. This status describes code presence and prototype functionality; it is not an independent usability, security, or correctness audit.
+
+Table~\ref{tab:features} summarizes principal capabilities and their implementation basis.
+\begin{table}[t]
+\centering\small
+\caption{Core NutriPilot capabilities}
+\label{tab:features}
+\begin{tabular}{p{0.29\columnwidth}p{0.62\columnwidth}}
+\toprule
+Capability & Current implementation \\
+\midrule
+Profile targets & Mifflin--St Jeor estimate, activity factor, goal adjustment, macro conversion \\
+Meal planning & Seven days, four slots/day, curated catalog, diet/allergy filtering, lock/refresh/swap \\
+Shopping support & Ingredient aggregation, substring pantry matching, quantity subtraction \\
+Tracking & Water and weight entry, eaten-meal state, progress charts \\
+Recommendations & Weighted rule-based score with profile, pantry, and interaction features \\
+Reporting & Weekly/monthly report views, generated PDF, email attachment workflow \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+No participant study, clinical validation, measured recommendation accuracy, or production deployment results are available in the project artifacts. Progress series and some report fields are seeded or generated by deterministic/synthetic mock logic. We therefore report no efficacy, adherence, or user-satisfaction results.
+
+\section{Discussion and Limitations}
+The main engineering value of NutriPilot is the integration of several connected planning workflows in one prototype. Modular domain code and typed API boundaries offer a basis for replacing the mock layer with durable services. Explicit filtering and visible meal actions make some personalization logic inspectable.
+
+Several limitations materially constrain interpretation. First, the in-memory store is not durable or isolated for multi-user production use. Second, the catalog is small, nutrition data are embedded in recipe objects, and string matching can miss allergens or ingredient synonyms; a dietary tag must not be treated as a safety guarantee. Third, the energy formula and fixed macro defaults are simplified estimates, not individualized medical advice. Fourth, the weekly planner uses slot pools and modulo selection rather than optimizing weekly nutrient adequacy, variety, or budget. Fifth, the recommendation score is hand-weighted and not validated against user judgments. Sixth, progress displays can use synthetic values and cannot substantiate actual behavioral change. Finally, the mock authentication and email configuration are development-oriented and require deployment security review.
+
+Future evaluation should first test formula and constraint behavior against a reviewed set of cases, then assess recipe ranking with participant preference judgments, and finally conduct a usability study with transparent consent and safeguards. Any health-outcome study would require an appropriate protocol and qualified oversight. A production extension would need a validated nutrition dataset, persistent per-user storage, robust ingredient ontology and allergen handling, monitoring, and security review. These are future requirements, not capabilities claimed here.
+
+\section{Conclusion}
+This paper described NutriPilot, a capstone web prototype combining estimated nutrition targets, rule-based meal planning and recommendations, pantry-aware shopping, tracking, and reports. Inspection of the implementation shows that the planner and progress subsystem rely on curated and simulated data, respectively. The application is consequently a software demonstration rather than evidence of clinical benefit or real-world recommendation performance. Replacing mock persistence, strengthening food and allergy data, and conducting transparent user-centered evaluation are necessary next steps.
+
+\begin{thebibliography}{9}\small
+\bibitem{mifflin} M. D. Mifflin et al., ``A new predictive equation for resting energy expenditure in healthy individuals,'' \emph{The American Journal of Clinical Nutrition}, vol. 51, no. 2, pp. 241--247, 1990, doi: 10.1093/ajcn/51.2.241.
+\bibitem{who} World Health Organization, ``Healthy diet,'' Fact sheet, 2020. [Online]. Available: \url{https://www.who.int/news-room/fact-sheets/detail/healthy-diet}
+\bibitem{burke} L. E. Burke, J. Wang, and M. A. Sevick, ``Self-monitoring in weight loss: A systematic review of the literature,'' \emph{Journal of the American Dietetic Association}, vol. 111, no. 1, pp. 92--102, 2011, doi: 10.1016/j.jada.2010.10.008.
+\bibitem{ricci} F. Ricci, L. Rokach, and B. Shapira, Eds., \emph{Recommender Systems Handbook}, 3rd ed. Springer, 2022.
+\end{thebibliography}
+\end{document}
