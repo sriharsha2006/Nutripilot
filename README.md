@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🥗 NutriPilot
 
 **NutriPilot** is an AI-powered personal nutrition and meal planning web application built as a Foundations of AI Capstone project. It helps users achieve their dietary goals through smart meal plans, pantry management, real-time tracking, and analytics — all with a modern, responsive UI.
@@ -185,3 +186,7 @@ All 22 SRS functional requirements are implemented. See [`IMPLEMENTATION_STATUS.
 ## 📄 License
 
 This project was created as an academic Capstone submission and is intended for educational purposes.
+=======
+# Nutripilot
+Personalized nutrition and meal planning application
+>>>>>>> origin/main
